@@ -1,4 +1,4 @@
-%% Copyright (c) 2009 
+%% Copyright (c) 2007
 %%          Mats Cronqvist <mats.cronqvist@ericsson.com>
 %%          Chris Newcombe <chris.newcombe@gmail.com> 
 %%          Jacob Vorreuter <jacob.vorreuter@gmail.com>
