@@ -93,7 +93,7 @@ from_string(CodeStr, CompileFormsOptions) ->
     %% In this case, #2 is meaningless.
     IncludeSearchPath = ["." | reverse([Dir || {i, Dir} <- CompileFormsOptions])],
     {RevForms, _OutMacroDict} = scan_and_parse(CodeStr, Filename, 1, [], InitMD, IncludeSearchPath),
-    Forms = reverse(RevForms),
+    Forms = [{attribute, 0, file, {"compiled_from_string", 0}}|reverse([{eof, 0}|RevForms])],
 
     %% note: 'binary' is forced as an implicit option, whether it is provided or not.
     case compile:forms(Forms, CompileFormsOptions) of
@@ -124,8 +124,9 @@ scan_and_parse([], _CurrFilename, _CurrLine, RevForms, MacroDict, _IncludeSearch
 scan_and_parse(RemainingText, CurrFilename, CurrLine, RevForms, MacroDict, IncludeSearchPath) ->
     case scanner(RemainingText, CurrLine, MacroDict) of
 	    {tokens, NLine, NRemainingText, Toks} ->
-	        {ok, Form} = erl_parse:parse_form(Toks),
-	        scan_and_parse(NRemainingText, CurrFilename, NLine, [Form | RevForms], MacroDict, IncludeSearchPath);
+	        {ok, Form0} = erl_parse:parse_form(Toks),
+            {Form, Forms} = normalize_record(Form0),
+	        scan_and_parse(NRemainingText, CurrFilename, NLine, [ Form | Forms ++ RevForms], MacroDict, IncludeSearchPath);
 	    {macro, NLine, NRemainingText, NMacroDict} ->
 	        scan_and_parse(NRemainingText, CurrFilename, NLine, RevForms,NMacroDict, IncludeSearchPath);
         {include, NLine, NRemainingText, IncludeFilename} ->
@@ -279,3 +280,16 @@ read_include_file(Filename, IncludeSearchPath) ->
         {error, Reason} ->
             throw({failed_to_read_include_file, Reason, Filename, IncludeSearchPath})
     end.
+
+normalize_record({attribute, La, record, {Record, Fields}} = Form) ->
+    case epp:normalize_typed_record_fields(Fields) of
+        {typed, NewFields} ->
+            {{attribute, La, record, {Record, NewFields}},
+             [{attribute, La, type,
+              {{record, Record}, Fields, []}}]};
+        not_typed ->
+            {Form, []}
+    end;
+normalize_record(Form) ->
+    {Form, []}.
+
