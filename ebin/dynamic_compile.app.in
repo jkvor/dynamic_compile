@@ -11,6 +11,6 @@ cat > ebin/dynamic_compile.app << EOF
 ${MODULES}
     ]},
     {registered, []},
-    {applications, [kernel, stdlib]}
+    {applications, [compiler, kernel, stdlib]}
 ]}.
 EOF
