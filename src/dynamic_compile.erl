@@ -41,6 +41,7 @@
 -module(dynamic_compile).
 
 %% API
+-export([forms_from_string/1]).
 -export([load_from_string/1, load_from_string/2]).
 -export([from_string/1, from_string/2]).
 
@@ -49,6 +50,21 @@
 %%====================================================================
 %% API
 %%====================================================================
+
+%%--------------------------------------------------------------------
+%% Function:
+%% Description:
+%%   Returns forms which can be used with
+%%           compile:forms(Forms)
+%%--------------------------------------------------------------------
+forms_from_string(CodeStr) ->
+	forms_from_string(CodeStr, []).
+
+% takes Options as for compile:forms/2
+forms_from_string(CodeStr, CompileFormsOptions) ->
+    {RevForms, _OutMacroDict} = get_forms(CodeStr, CompileFormsOptions),
+    reverse(RevForms).
+
 %%--------------------------------------------------------------------
 %% Function:
 %% Description:
@@ -72,6 +88,30 @@ from_string(CodeStr) ->
 
 % takes Options as for compile:forms/2
 from_string(CodeStr, CompileFormsOptions) ->
+	{RevForms, _OutMacroDict} = get_forms(CodeStr, CompileFormsOptions),
+    Forms = [{attribute, 0, file, {"compiled_from_string", 0}}|reverse([{eof, 0}|RevForms])],
+
+    %% note: 'binary' is forced as an implicit option, whether it is provided or not.
+    case compile:forms(Forms, CompileFormsOptions) of
+        {ok, ModuleName, CompiledCodeBinary} when is_binary(CompiledCodeBinary) ->
+            {ModuleName, CompiledCodeBinary};
+        {ok, ModuleName, CompiledCodeBinary, []} when is_binary(CompiledCodeBinary) ->  % empty warnings list
+            {ModuleName, CompiledCodeBinary};
+        {ok, _ModuleName, _CompiledCodeBinary, Warnings} ->
+            throw({?MODULE, warnings, Warnings});
+        Other ->
+            throw({?MODULE, compile_forms, Other})
+    end.
+
+%%====================================================================
+%% Internal functions
+%%====================================================================
+%%%## 'get_forms'
+%%%
+%%% Get forms from string to be used in companion 
+%%% with other forms for manual compilation.
+%% returns {ReverseForms, FinalMacroDict}
+get_forms(CodeStr, CompileFormsOptions) ->
     %% Initialise the macro dictionary with the default predefined macros,
     %% (adapted from epp.erl:predef_macros/1
     Filename = "compiled_from_string",
@@ -92,24 +132,8 @@ from_string(CodeStr, CompileFormsOptions) ->
     %%      3. the directories specified using the i option. The directory specified last is searched first.
     %% In this case, #2 is meaningless.
     IncludeSearchPath = ["." | reverse([Dir || {i, Dir} <- CompileFormsOptions])],
-    {RevForms, _OutMacroDict} = scan_and_parse(CodeStr, Filename, 1, [], InitMD, IncludeSearchPath),
-    Forms = [{attribute, 0, file, {"compiled_from_string", 0}}|reverse([{eof, 0}|RevForms])],
+    scan_and_parse(CodeStr, Filename, 1, [], InitMD, IncludeSearchPath).
 
-    %% note: 'binary' is forced as an implicit option, whether it is provided or not.
-    case compile:forms(Forms, CompileFormsOptions) of
-        {ok, ModuleName, CompiledCodeBinary} when is_binary(CompiledCodeBinary) ->
-            {ModuleName, CompiledCodeBinary};
-        {ok, ModuleName, CompiledCodeBinary, []} when is_binary(CompiledCodeBinary) ->  % empty warnings list
-            {ModuleName, CompiledCodeBinary};
-        {ok, _ModuleName, _CompiledCodeBinary, Warnings} ->
-            throw({?MODULE, warnings, Warnings});
-        Other ->
-            throw({?MODULE, compile_forms, Other})
-    end.
-
-%%====================================================================
-%% Internal functions
-%%====================================================================
 %%% Code from Mats Cronqvist
 %%% See http://www.erlang.org/pipermail/erlang-questions/2007-March/025507.html
 %%%## 'scan_and_parse'
