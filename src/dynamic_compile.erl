@@ -60,28 +60,9 @@
 forms_from_string(CodeStr) ->
 	forms_from_string(CodeStr, []).
 
+% takes Options as for compile:forms/2
 forms_from_string(CodeStr, CompileFormsOptions) ->
-    %% Initialise the macro dictionary with the default predefined macros,
-    %% (adapted from epp.erl:predef_macros/1
-    Filename = "compiled_from_string",
-    %%Machine  = list_to_atom(erlang:system_info(machine)),
-    Ms0    = dict:new(),
-    % Ms1    = dict:store('FILE',          {[], "compiled_from_string"}, Ms0),
-    % Ms2    = dict:store('LINE',          {[], 1}, Ms1),  % actually we might add special code for this
-    % Ms3    = dict:store('MODULE',        {[], undefined},              Ms2),
-    % Ms4    = dict:store('MODULE_STRING', {[], undefined},              Ms3),
-    % Ms5    = dict:store('MACHINE',       {[], Machine},                Ms4),
-    % InitMD = dict:store(Machine,         {[], true},                   Ms5),
-    InitMD = Ms0,
-	
-    %% From the docs for compile:forms:
-    %%    When encountering an -include or -include_dir directive, the compiler searches for header files in the following directories:
-    %%      1. ".", the current working directory of the file server;
-    %%      2. the base name of the compiled file;
-    %%      3. the directories specified using the i option. The directory specified last is searched first.
-    %% In this case, #2 is meaningless.
-    IncludeSearchPath = ["." | reverse([Dir || {i, Dir} <- CompileFormsOptions])],
-    {RevForms, _OutMacroDict} = scan_and_parse(CodeStr, Filename, 1, [], InitMD, IncludeSearchPath),
+    {RevForms, _OutMacroDict} = get_forms(CodeStr, CompileFormsOptions),
     reverse(RevForms).
 
 %%--------------------------------------------------------------------
@@ -107,6 +88,30 @@ from_string(CodeStr) ->
 
 % takes Options as for compile:forms/2
 from_string(CodeStr, CompileFormsOptions) ->
+	{RevForms, _OutMacroDict} = get_forms(CodeStr, CompileFormsOptions),
+    Forms = [{attribute, 0, file, {"compiled_from_string", 0}}|reverse([{eof, 0}|RevForms])],
+
+    %% note: 'binary' is forced as an implicit option, whether it is provided or not.
+    case compile:forms(Forms, CompileFormsOptions) of
+        {ok, ModuleName, CompiledCodeBinary} when is_binary(CompiledCodeBinary) ->
+            {ModuleName, CompiledCodeBinary};
+        {ok, ModuleName, CompiledCodeBinary, []} when is_binary(CompiledCodeBinary) ->  % empty warnings list
+            {ModuleName, CompiledCodeBinary};
+        {ok, _ModuleName, _CompiledCodeBinary, Warnings} ->
+            throw({?MODULE, warnings, Warnings});
+        Other ->
+            throw({?MODULE, compile_forms, Other})
+    end.
+
+%%====================================================================
+%% Internal functions
+%%====================================================================
+%%%## 'get_forms'
+%%%
+%%% Get forms from string to be used in companion 
+%%% with other forms for manual compilation.
+%% returns {ReverseForms, FinalMacroDict}
+get_forms(CodeStr, CompileFormsOptions) ->
     %% Initialise the macro dictionary with the default predefined macros,
     %% (adapted from epp.erl:predef_macros/1
     Filename = "compiled_from_string",
@@ -127,24 +132,8 @@ from_string(CodeStr, CompileFormsOptions) ->
     %%      3. the directories specified using the i option. The directory specified last is searched first.
     %% In this case, #2 is meaningless.
     IncludeSearchPath = ["." | reverse([Dir || {i, Dir} <- CompileFormsOptions])],
-    {RevForms, _OutMacroDict} = scan_and_parse(CodeStr, Filename, 1, [], InitMD, IncludeSearchPath),
-    Forms = [{attribute, 0, file, {"compiled_from_string", 0}}|reverse([{eof, 0}|RevForms])],
+    scan_and_parse(CodeStr, Filename, 1, [], InitMD, IncludeSearchPath),
 
-    %% note: 'binary' is forced as an implicit option, whether it is provided or not.
-    case compile:forms(Forms, CompileFormsOptions) of
-        {ok, ModuleName, CompiledCodeBinary} when is_binary(CompiledCodeBinary) ->
-            {ModuleName, CompiledCodeBinary};
-        {ok, ModuleName, CompiledCodeBinary, []} when is_binary(CompiledCodeBinary) ->  % empty warnings list
-            {ModuleName, CompiledCodeBinary};
-        {ok, _ModuleName, _CompiledCodeBinary, Warnings} ->
-            throw({?MODULE, warnings, Warnings});
-        Other ->
-            throw({?MODULE, compile_forms, Other})
-    end.
-
-%%====================================================================
-%% Internal functions
-%%====================================================================
 %%% Code from Mats Cronqvist
 %%% See http://www.erlang.org/pipermail/erlang-questions/2007-March/025507.html
 %%%## 'scan_and_parse'
