@@ -82,7 +82,7 @@ forms_from_string(CodeStr, CompileFormsOptions) ->
     %% In this case, #2 is meaningless.
     IncludeSearchPath = ["." | reverse([Dir || {i, Dir} <- CompileFormsOptions])],
     {RevForms, _OutMacroDict} = scan_and_parse(CodeStr, Filename, 1, [], InitMD, IncludeSearchPath),
-    Forms = reverse(RevForms),
+    reverse(RevForms).
 
 %%--------------------------------------------------------------------
 %% Function:
