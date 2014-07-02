@@ -41,6 +41,7 @@
 -module(dynamic_compile).
 
 %% API
+-export([forms_from_string/1]).
 -export([load_from_string/1, load_from_string/2]).
 -export([from_string/1, from_string/2]).
 
@@ -49,6 +50,40 @@
 %%====================================================================
 %% API
 %%====================================================================
+
+%%--------------------------------------------------------------------
+%% Function:
+%% Description:
+%%   Returns forms which can be used with
+%%           compile:forms(Forms)
+%%--------------------------------------------------------------------
+forms_from_string(CodeStr) ->
+	forms_from_string(CodeStr, []).
+
+forms_from_string(CodeStr, CompileFormsOptions) ->
+    %% Initialise the macro dictionary with the default predefined macros,
+    %% (adapted from epp.erl:predef_macros/1
+    Filename = "compiled_from_string",
+    %%Machine  = list_to_atom(erlang:system_info(machine)),
+    Ms0    = dict:new(),
+    % Ms1    = dict:store('FILE',          {[], "compiled_from_string"}, Ms0),
+    % Ms2    = dict:store('LINE',          {[], 1}, Ms1),  % actually we might add special code for this
+    % Ms3    = dict:store('MODULE',        {[], undefined},              Ms2),
+    % Ms4    = dict:store('MODULE_STRING', {[], undefined},              Ms3),
+    % Ms5    = dict:store('MACHINE',       {[], Machine},                Ms4),
+    % InitMD = dict:store(Machine,         {[], true},                   Ms5),
+    InitMD = Ms0,
+	
+    %% From the docs for compile:forms:
+    %%    When encountering an -include or -include_dir directive, the compiler searches for header files in the following directories:
+    %%      1. ".", the current working directory of the file server;
+    %%      2. the base name of the compiled file;
+    %%      3. the directories specified using the i option. The directory specified last is searched first.
+    %% In this case, #2 is meaningless.
+    IncludeSearchPath = ["." | reverse([Dir || {i, Dir} <- CompileFormsOptions])],
+    {RevForms, _OutMacroDict} = scan_and_parse(CodeStr, Filename, 1, [], InitMD, IncludeSearchPath),
+    Forms = reverse(RevForms),
+
 %%--------------------------------------------------------------------
 %% Function:
 %% Description:
