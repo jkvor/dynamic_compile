@@ -132,7 +132,7 @@ get_forms(CodeStr, CompileFormsOptions) ->
     %%      3. the directories specified using the i option. The directory specified last is searched first.
     %% In this case, #2 is meaningless.
     IncludeSearchPath = ["." | reverse([Dir || {i, Dir} <- CompileFormsOptions])],
-    scan_and_parse(CodeStr, Filename, 1, [], InitMD, IncludeSearchPath),
+    scan_and_parse(CodeStr, Filename, 1, [], InitMD, IncludeSearchPath).
 
 %%% Code from Mats Cronqvist
 %%% See http://www.erlang.org/pipermail/erlang-questions/2007-March/025507.html
